@@ -3,14 +3,19 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getAvatar, getMascot } from "@/lib/avatars";
-import { loadState } from "@/lib/storage";
+import { loadState, refreshState } from "@/lib/storage";
 import type { Profile } from "@/lib/types";
 
 export default function HomePage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    setProfiles(loadState().profiles);
+    refreshState()
+      .then((state) => setProfiles(state.profiles))
+      .catch(() => setError("No se pudo conectar con el servidor ForMyKids."))
+      .finally(() => setLoading(false));
   }, []);
 
   return (
@@ -23,7 +28,9 @@ export default function HomePage() {
       <div className="home-grid">
         <section className="panel">
           <h2>¿Quién eres?</h2>
-          {profiles.length === 0 ? (
+          {loading && <p className="muted">Sincronizando con la PC…</p>}
+          {error && <p style={{ color: "#b91c1c", fontWeight: 700 }}>{error}</p>}
+          {!loading && !error && profiles.length === 0 ? (
             <p className="muted">Aún no hay perfiles. Crea el primero para empezar.</p>
           ) : (
             <div className="profile-grid">
@@ -32,7 +39,10 @@ export default function HomePage() {
                 const mascot = getMascot(p.mascotId);
                 return (
                   <Link key={p.id} href={`/kid/${p.id}`} className="profile-card">
-                    <span className="profile-emoji" style={{ filter: `drop-shadow(0 8px 0 ${avatar.accent}33)` }}>
+                    <span
+                      className="profile-emoji"
+                      style={{ filter: `drop-shadow(0 8px 0 ${avatar.accent}33)` }}
+                    >
                       {avatar.emoji}
                     </span>
                     <strong>{avatar.label}</strong>
@@ -55,6 +65,12 @@ export default function HomePage() {
               Zona de adultos
             </Link>
           </div>
+          {!loading && (
+            <p className="muted" style={{ marginTop: "0.85rem", fontSize: "0.9rem" }}>
+              Progreso sincronizado en el servidor de la PC ({loadState().profiles.length} perfil
+              {loadState().profiles.length === 1 ? "" : "es"}).
+            </p>
+          )}
         </section>
 
         <aside className="panel">
@@ -64,6 +80,7 @@ export default function HomePage() {
             <li>Ejemplo → práctica → prueba</li>
             <li>Necesitas 80% o más para avanzar</li>
             <li>Recordatorios a las 10:00, 13:00 y 16:00</li>
+            <li>Mismos datos en PC y tablets</li>
           </ul>
         </aside>
       </div>

@@ -67,12 +67,25 @@ npm run start
 4. Si sacas menos de 80%, repites con preguntas nuevas.
 5. **Zona de adultos** → PIN `0692` para ver progreso y marcar días.
 
+## Sincronización PC ↔ tablets
+
+El progreso **ya no vive solo en cada tablet**. Se guarda en la PC (servidor) en:
+
+```text
+data/formykids-state.json
+```
+
+- Crear perfil, terminar pruebas y marcar días se guarda en ese archivo.
+- Cualquier tablet o la PC ve los mismos datos al abrir ForMyKids (mientras `npm run dev` / `npm run start` esté corriendo en la PC).
+- Si tenías datos viejos solo en el navegador, se migran **una vez** al servidor cuando este está vacío.
+- El PIN de adulto se desbloquea por dispositivo/sesión (no se sincroniza a propósito).
+
+> Importante: la PC debe estar encendida y ForMyKids corriendo. Sin el servidor, las tablets no podrán guardar ni leer progreso.
+
 ## Notas
 
-- Los datos se guardan en el navegador (`localStorage`) del dispositivo.
-- Para ver el mismo progreso en PC y tablet, usa preferiblemente la misma tablet de cada niño o exportaremos sync en una versión futura.
 - Los avatares son personajes **originales** (estilo héroes/magia/anime), no marcas registradas.
-- Recordatorios: deja la pestaña abierta o vuelve a entrar cerca de esas horas; también puede pedir permiso de notificaciones del navegador.
+- Recordatorios: deja la pestaña abierta o vuelve a entrar cerca de esas horas.
 
 ## Stack
 

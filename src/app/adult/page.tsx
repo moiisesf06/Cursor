@@ -7,7 +7,7 @@ import { getDayPlan } from "@/lib/content";
 import {
   clearAdultSession,
   isAdultUnlocked,
-  loadState,
+  refreshState,
   saveDayProgress,
   setAdultSession,
 } from "@/lib/storage";
@@ -39,9 +39,9 @@ export default function AdultPage() {
   const [selectedId, setSelectedId] = useState<string>("");
   const [message, setMessage] = useState("");
   const [rows, setRows] = useState<DayRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  function buildRows(profile: Profile): DayRow[] {
-    const state = loadState();
+  function buildRows(profile: Profile, state: Awaited<ReturnType<typeof refreshState>>): DayRow[] {
     return Array.from({ length: TOTAL_DAYS }, (_, i) => {
       const day = i + 1;
       const plan = getDayPlan(profile.ageGroup, day);
@@ -72,26 +72,31 @@ export default function AdultPage() {
     });
   }
 
-  function refresh(nextSelectedId?: string) {
-    const state = loadState();
+  async function refresh(nextSelectedId?: string) {
+    const state = await refreshState();
     setProfiles(state.profiles);
     const id = nextSelectedId || selectedId || state.profiles[0]?.id || "";
     if (id) setSelectedId(id);
     const profile = state.profiles.find((p) => p.id === id);
-    setRows(profile ? buildRows(profile) : []);
+    setRows(profile ? buildRows(profile, state) : []);
   }
 
   useEffect(() => {
     setUnlocked(isAdultUnlocked());
-    refresh();
+    refresh()
+      .catch(() => setError("No se pudo conectar con el servidor."))
+      .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!selectedId) return;
-    const profile = profiles.find((p) => p.id === selectedId);
-    if (profile) setRows(buildRows(profile));
-  }, [selectedId, profiles]);
+    if (!selectedId || loading) return;
+    refreshState().then((state) => {
+      const profile = state.profiles.find((p) => p.id === selectedId);
+      if (profile) setRows(buildRows(profile, state));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
 
@@ -106,26 +111,30 @@ export default function AdultPage() {
     }
   }
 
-  function markDayComplete(day: number, complete: boolean) {
+  async function markDayComplete(day: number, complete: boolean) {
     if (!selected) return;
     const plan = getDayPlan(selected.ageGroup, day);
     const scores: Record<string, number> = {};
     for (const act of plan.activities) {
       scores[act.id] = complete ? Math.max(PASS_THRESHOLD, 100) : 0;
     }
-    saveDayProgress({
-      profileId: selected.id,
-      day,
-      completed: complete,
-      scores,
-      updatedAt: new Date().toISOString(),
-    });
-    setMessage(
-      complete
-        ? `Día ${day} marcado como completado.`
-        : `Día ${day} marcado como pendiente.`,
-    );
-    refresh(selected.id);
+    try {
+      await saveDayProgress({
+        profileId: selected.id,
+        day,
+        completed: complete,
+        scores,
+        updatedAt: new Date().toISOString(),
+      });
+      setMessage(
+        complete
+          ? `Día ${day} marcado como completado (sincronizado).`
+          : `Día ${day} marcado como pendiente (sincronizado).`,
+      );
+      await refresh(selected.id);
+    } catch {
+      setMessage("Error al guardar en el servidor.");
+    }
   }
 
   if (!unlocked) {
@@ -191,11 +200,12 @@ export default function AdultPage() {
 
       <header className="brand-hero" style={{ textAlign: "left", paddingLeft: 0 }}>
         <h1>Progreso familiar</h1>
-        <p>Revisa calificaciones, días completados y marca tareas manualmente.</p>
+        <p>Datos en la PC: visibles igual en tablets y computadora.</p>
       </header>
 
       <section className="panel">
         <h2>Perfiles</h2>
+        {loading && <p className="muted">Sincronizando…</p>}
         <div className="home-actions">
           {profiles.map((p) => {
             const a = getAvatar(p.avatarId);
@@ -210,7 +220,9 @@ export default function AdultPage() {
               </button>
             );
           })}
-          {profiles.length === 0 && <p className="muted">No hay perfiles todavía.</p>}
+          {!loading && profiles.length === 0 && (
+            <p className="muted">No hay perfiles todavía.</p>
+          )}
         </div>
         {message && <p style={{ color: "#065f46", fontWeight: 700 }}>{message}</p>}
       </section>

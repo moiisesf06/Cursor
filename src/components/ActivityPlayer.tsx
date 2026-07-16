@@ -8,7 +8,6 @@ import { pickTestQuestions, scoreAnswers } from "@/lib/content";
 import {
   getDayProgress,
   getLatestAttempt,
-  loadState,
   saveAttempt,
   saveDayProgress,
 } from "@/lib/storage";
@@ -56,13 +55,16 @@ export function ActivityPlayer({
     return pickTestQuestions(activity, initialAttemptNumber);
   });
 
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
   const allTestAnswered = useMemo(
     () => testQuestions.every((q) => Boolean(testAnswers[q.id])),
     [testQuestions, testAnswers],
   );
 
-  function finishTest() {
-    if (!allTestAnswered || locked) return;
+  async function finishTest() {
+    if (!allTestAnswered || locked || saving) return;
     const s = scoreAnswers(testQuestions, testAnswers);
     setLocked(true);
     setScore(s);
@@ -70,54 +72,59 @@ export function ActivityPlayer({
     setPassed(ok);
     if (ok) playSuccess();
     else playError();
+    setSaving(true);
+    setSaveError("");
 
-    saveAttempt({
-      profileId: profile.id,
-      day,
-      activityId: activity.id,
-      score: s,
-      passed: ok,
-      locked: true,
-      answers: testAnswers,
-      questionIds: testQuestions.map((q) => q.id),
-      completedAt: new Date().toISOString(),
-      attemptNumber,
-    });
+    try {
+      const stateAfterAttempt = await saveAttempt({
+        profileId: profile.id,
+        day,
+        activityId: activity.id,
+        score: s,
+        passed: ok,
+        locked: true,
+        answers: testAnswers,
+        questionIds: testQuestions.map((q) => q.id),
+        completedAt: new Date().toISOString(),
+        attemptNumber,
+      });
 
-    // Update day progress if all activities passed
-    const plan = getDayPlan(profile.ageGroup, day);
-    const state = loadState();
-    const scores: Record<string, number> = {
-      ...(getDayProgress(profile.id, day)?.scores ?? {}),
-      [activity.id]: s,
-    };
-    const allPassed = plan.activities.every((act) => {
-      if (act.id === activity.id) return ok;
-      const att = state.attempts
-        .filter(
-          (a) =>
-            a.profileId === profile.id &&
-            a.day === day &&
-            a.activityId === act.id &&
-            a.passed,
-        )
-        .sort((a, b) => b.attemptNumber - a.attemptNumber)[0];
-      if (att) {
-        scores[act.id] = att.score;
-        return true;
-      }
-      return false;
-    });
+      const plan = getDayPlan(profile.ageGroup, day);
+      const scores: Record<string, number> = {
+        ...(getDayProgress(profile.id, day)?.scores ?? {}),
+        [activity.id]: s,
+      };
+      const allPassed = plan.activities.every((act) => {
+        if (act.id === activity.id) return ok;
+        const att = stateAfterAttempt.attempts
+          .filter(
+            (a) =>
+              a.profileId === profile.id &&
+              a.day === day &&
+              a.activityId === act.id &&
+              a.passed,
+          )
+          .sort((a, b) => b.attemptNumber - a.attemptNumber)[0];
+        if (att) {
+          scores[act.id] = att.score;
+          return true;
+        }
+        return false;
+      });
 
-    saveDayProgress({
-      profileId: profile.id,
-      day,
-      completed: allPassed,
-      scores,
-      updatedAt: new Date().toISOString(),
-    });
-
-    setPhase("result");
+      await saveDayProgress({
+        profileId: profile.id,
+        day,
+        completed: allPassed,
+        scores,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch {
+      setSaveError("No se pudo guardar en el servidor. Revisa que la PC esté encendida.");
+    } finally {
+      setSaving(false);
+      setPhase("result");
+    }
   }
 
   function retryWithNewQuestions() {
@@ -214,10 +221,10 @@ export function ActivityPlayer({
             <button
               type="button"
               className="btn primary"
-              disabled={!allTestAnswered}
+              disabled={!allTestAnswered || saving}
               onClick={finishTest}
             >
-              Terminar
+              {saving ? "Guardando…" : "Terminar"}
             </button>
           )}
         </section>
@@ -229,6 +236,7 @@ export function ActivityPlayer({
           <div className={`score-bubble ${passed ? "pass" : "fail"}`}>
             {score}
           </div>
+          {saveError && <p style={{ color: "#b91c1c", fontWeight: 700 }}>{saveError}</p>}
           <p>
             {passed
               ? `${mascot.emoji} ${mascot.cheer} Completaste esta tarea.`

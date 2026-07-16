@@ -2,20 +2,27 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { AVATARS, MASCOTS } from "@/lib/avatars";
-import { loadState, upsertProfile } from "@/lib/storage";
-import type { AgeGroup } from "@/lib/types";
+import { refreshState, upsertProfile } from "@/lib/storage";
+import type { AgeGroup, Profile } from "@/lib/types";
 
 export default function SetupPage() {
   const router = useRouter();
-  const existing = useMemo(() => loadState().profiles, []);
+  const [existing, setExisting] = useState<Profile[]>([]);
   const [ageGroup, setAgeGroup] = useState<AgeGroup | null>(null);
   const [avatarId, setAvatarId] = useState<string | null>(null);
   const [mascotId, setMascotId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  function save() {
+  useEffect(() => {
+    refreshState()
+      .then((s) => setExisting(s.profiles))
+      .catch(() => setError("No se pudo conectar con el servidor."));
+  }, []);
+
+  async function save() {
     if (!ageGroup || !avatarId || !mascotId) {
       setError("Elige edad, avatar y mascota.");
       return;
@@ -28,15 +35,22 @@ export default function SetupPage() {
       setError("Ya existe un perfil para esa edad. Elige la otra.");
       return;
     }
-    const id = `p-${ageGroup}-${Date.now()}`;
-    upsertProfile({
-      id,
-      ageGroup,
-      avatarId,
-      mascotId,
-      createdAt: new Date().toISOString(),
-    });
-    router.push(`/kid/${id}`);
+    setSaving(true);
+    setError("");
+    try {
+      const id = `p-${ageGroup}-${Date.now()}`;
+      await upsertProfile({
+        id,
+        ageGroup,
+        avatarId,
+        mascotId,
+        createdAt: new Date().toISOString(),
+      });
+      router.push(`/kid/${id}`);
+    } catch {
+      setError("No se pudo guardar el perfil en el servidor.");
+      setSaving(false);
+    }
   }
 
   const packs = ["heroes", "magic", "animals", "anime"] as const;
@@ -54,7 +68,7 @@ export default function SetupPage() {
       </Link>
       <header className="brand-hero" style={{ textAlign: "left", paddingLeft: 0 }}>
         <h1>Crear perfil</h1>
-        <p>Elige tu edad, un avatar y una mascota. No necesitas escribir tu nombre.</p>
+        <p>Elige tu edad, un avatar y una mascota. Se guarda en la PC para todas las tablets.</p>
       </header>
 
       <section className="panel setup-section">
@@ -122,8 +136,8 @@ export default function SetupPage() {
 
       {error && <p style={{ color: "#b91c1c", fontWeight: 700 }}>{error}</p>}
 
-      <button type="button" className="btn primary" onClick={save}>
-        Guardar y entrar
+      <button type="button" className="btn primary" onClick={save} disabled={saving}>
+        {saving ? "Guardando…" : "Guardar y entrar"}
       </button>
     </main>
   );

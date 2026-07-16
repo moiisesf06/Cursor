@@ -7,7 +7,7 @@ import { Calendar30 } from "@/components/Calendar30";
 import { SpeakButton } from "@/components/SpeakButton";
 import { getAvatar, getMascot } from "@/lib/avatars";
 import { getDayPlan } from "@/lib/content";
-import { getCurrentDay, loadState } from "@/lib/storage";
+import { getCurrentDay, refreshState } from "@/lib/storage";
 import type { DayProgress, Profile } from "@/lib/types";
 
 export default function KidDashboardPage() {
@@ -15,16 +15,28 @@ export default function KidDashboardPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [progress, setProgress] = useState<DayProgress[]>([]);
   const [currentDay, setCurrentDay] = useState(1);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const state = loadState();
-    const p = state.profiles.find((x) => x.id === params.id) ?? null;
-    setProfile(p);
-    if (p) {
-      setProgress(state.dayProgress.filter((d) => d.profileId === p.id));
-      setCurrentDay(getCurrentDay(p.id));
-    }
+    refreshState()
+      .then((state) => {
+        const p = state.profiles.find((x) => x.id === params.id) ?? null;
+        setProfile(p);
+        if (p) {
+          setProgress(state.dayProgress.filter((d) => d.profileId === p.id));
+          setCurrentDay(getCurrentDay(p.id));
+        }
+      })
+      .finally(() => setLoading(false));
   }, [params.id]);
+
+  if (loading) {
+    return (
+      <main className="app-shell">
+        <p className="muted">Sincronizando…</p>
+      </main>
+    );
+  }
 
   if (!profile) {
     return (

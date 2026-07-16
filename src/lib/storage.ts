@@ -2,7 +2,9 @@
 
 import type { ActivityAttempt, AppState, DayProgress, Profile } from "./types";
 
-const STORAGE_KEY = "formykids-v1";
+const LEGACY_KEY = "formykids-v1";
+const ADULT_KEY = "formykids-adult-until";
+const MIGRATED_KEY = "formykids-migrated-to-server";
 
 const emptyState = (): AppState => ({
   profiles: [],
@@ -10,58 +12,89 @@ const emptyState = (): AppState => ({
   dayProgress: [],
 });
 
-export function loadState(): AppState {
-  if (typeof window === "undefined") return emptyState();
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return emptyState();
-    return { ...emptyState(), ...JSON.parse(raw) } as AppState;
-  } catch {
-    return emptyState();
+let cache: AppState = emptyState();
+let loadPromise: Promise<AppState> | null = null;
+
+function applyCache(state: AppState) {
+  cache = {
+    profiles: state.profiles ?? [],
+    attempts: state.attempts ?? [],
+    dayProgress: state.dayProgress ?? [],
+  };
+  return cache;
+}
+
+async function postMutation(body: unknown): Promise<AppState> {
+  const res = await fetch("/api/state", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`No se pudo guardar en el servidor (${res.status})`);
   }
+  return applyCache((await res.json()) as AppState);
 }
 
-export function saveState(state: AppState) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+/** Sync snapshot from PC server. Safe to call often. */
+export async function refreshState(): Promise<AppState> {
+  if (typeof window === "undefined") return emptyState();
+
+  if (!loadPromise) {
+    loadPromise = (async () => {
+      const res = await fetch("/api/state", { cache: "no-store" });
+      if (!res.ok) throw new Error("No se pudo leer el estado del servidor");
+      const remote = applyCache((await res.json()) as AppState);
+
+      // One-time migration from old localStorage → server if server empty
+      const migrated = localStorage.getItem(MIGRATED_KEY);
+      if (!migrated && remote.profiles.length === 0) {
+        const legacyRaw = localStorage.getItem(LEGACY_KEY);
+        if (legacyRaw) {
+          try {
+            const legacy = JSON.parse(legacyRaw) as AppState;
+            if ((legacy.profiles?.length ?? 0) > 0) {
+              const merged = await postMutation({
+                op: "replace",
+                state: {
+                  profiles: legacy.profiles ?? [],
+                  attempts: legacy.attempts ?? [],
+                  dayProgress: legacy.dayProgress ?? [],
+                },
+              });
+              localStorage.setItem(MIGRATED_KEY, "1");
+              return merged;
+            }
+          } catch {
+            // ignore bad legacy payload
+          }
+        }
+      }
+      localStorage.setItem(MIGRATED_KEY, "1");
+      return remote;
+    })().finally(() => {
+      loadPromise = null;
+    });
+  }
+
+  return loadPromise;
 }
 
-export function upsertProfile(profile: Profile) {
-  const state = loadState();
-  const idx = state.profiles.findIndex((p) => p.id === profile.id);
-  if (idx >= 0) state.profiles[idx] = profile;
-  else state.profiles.push(profile);
-  // max 2 kids
-  state.profiles = state.profiles.slice(0, 2);
-  saveState(state);
-  return state;
+/** Latest known state (may be stale until refreshState). */
+export function loadState(): AppState {
+  return cache;
 }
 
-export function deleteProfile(id: string) {
-  const state = loadState();
-  state.profiles = state.profiles.filter((p) => p.id !== id);
-  state.attempts = state.attempts.filter((a) => a.profileId !== id);
-  state.dayProgress = state.dayProgress.filter((d) => d.profileId !== id);
-  saveState(state);
-  return state;
+export async function upsertProfile(profile: Profile) {
+  return postMutation({ op: "upsertProfile", profile });
 }
 
-export function saveAttempt(attempt: ActivityAttempt) {
-  const state = loadState();
-  state.attempts = [
-    ...state.attempts.filter(
-      (a) =>
-        !(
-          a.profileId === attempt.profileId &&
-          a.day === attempt.day &&
-          a.activityId === attempt.activityId &&
-          a.attemptNumber === attempt.attemptNumber
-        ),
-    ),
-    attempt,
-  ];
-  saveState(state);
-  return state;
+export async function deleteProfile(id: string) {
+  return postMutation({ op: "deleteProfile", profileId: id });
+}
+
+export async function saveAttempt(attempt: ActivityAttempt) {
+  return postMutation({ op: "saveAttempt", attempt });
 }
 
 export function getLatestAttempt(
@@ -69,24 +102,16 @@ export function getLatestAttempt(
   day: number,
   activityId: string,
 ): ActivityAttempt | undefined {
-  const state = loadState();
-  return state.attempts
-    .filter(
+  return loadState()
+    .attempts.filter(
       (a) =>
         a.profileId === profileId && a.day === day && a.activityId === activityId,
     )
     .sort((a, b) => b.attemptNumber - a.attemptNumber)[0];
 }
 
-export function saveDayProgress(progress: DayProgress) {
-  const state = loadState();
-  const idx = state.dayProgress.findIndex(
-    (d) => d.profileId === progress.profileId && d.day === progress.day,
-  );
-  if (idx >= 0) state.dayProgress[idx] = progress;
-  else state.dayProgress.push(progress);
-  saveState(state);
-  return state;
+export async function saveDayProgress(progress: DayProgress) {
+  return postMutation({ op: "saveDayProgress", progress });
 }
 
 export function getDayProgress(profileId: string, day: number) {
@@ -95,25 +120,27 @@ export function getDayProgress(profileId: string, day: number) {
   );
 }
 
+/** Adult unlock stays on the device session only (not synced). */
 export function setAdultSession(minutes = 60) {
-  const state = loadState();
-  state.adultUnlockedUntil = new Date(Date.now() + minutes * 60_000).toISOString();
-  saveState(state);
+  if (typeof window === "undefined") return;
+  sessionStorage.setItem(
+    ADULT_KEY,
+    new Date(Date.now() + minutes * 60_000).toISOString(),
+  );
 }
 
 export function isAdultUnlocked() {
-  const state = loadState();
-  if (!state.adultUnlockedUntil) return false;
-  return new Date(state.adultUnlockedUntil).getTime() > Date.now();
+  if (typeof window === "undefined") return false;
+  const until = sessionStorage.getItem(ADULT_KEY);
+  if (!until) return false;
+  return new Date(until).getTime() > Date.now();
 }
 
 export function clearAdultSession() {
-  const state = loadState();
-  delete state.adultUnlockedUntil;
-  saveState(state);
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(ADULT_KEY);
 }
 
-/** Current curriculum day for a profile (1-30): first incomplete day, or 30. */
 export function getCurrentDay(profileId: string): number {
   const state = loadState();
   for (let d = 1; d <= 30; d++) {

@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { SpeakButton } from "@/components/SpeakButton";
 import { getAvatar, getMascot } from "@/lib/avatars";
 import { getDayPlan } from "@/lib/content";
-import { getDayProgress, getLatestAttempt, loadState } from "@/lib/storage";
+import { getDayProgress, getLatestAttempt, refreshState } from "@/lib/storage";
 import type { Profile } from "@/lib/types";
 import { PASS_THRESHOLD } from "@/lib/types";
 
@@ -14,11 +14,23 @@ export default function DayPage() {
   const params = useParams<{ id: string; day: string }>();
   const day = Number(params.day);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [, setTick] = useState(0);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setProfile(loadState().profiles.find((p) => p.id === params.id) ?? null);
+    refreshState()
+      .then((state) => {
+        setProfile(state.profiles.find((p) => p.id === params.id) ?? null);
+      })
+      .finally(() => setReady(true));
   }, [params.id]);
+
+  if (!ready) {
+    return (
+      <main className="app-shell">
+        <p className="muted">Sincronizando…</p>
+      </main>
+    );
+  }
 
   if (!profile || Number.isNaN(day)) {
     return (
@@ -85,7 +97,6 @@ export default function DayPage() {
                 <Link
                   href={`/kid/${profile.id}/day/${day}/activity/${act.id}`}
                   className="btn primary"
-                  onClick={() => setTick((t) => t + 1)}
                 >
                   {attempt?.passed ? "Ver" : "Empezar"}
                 </Link>
