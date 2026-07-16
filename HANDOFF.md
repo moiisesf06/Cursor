@@ -1,16 +1,16 @@
 # Handoff: Plataforma educativa local (inglés + matemáticas)
 
 ## Estado del proyecto
-- **Fase:** planificación / discovery (aún **no** hay código de la app).
-- **Repo:** casi vacío (`README.md` placeholder). No hay implementación.
-- **Idioma de comunicación con el usuario:** **español** (regla del usuario).
-- **Objetivo del siguiente agente:** cerrar defaults pendientes (si el usuario no responde), entregar plan final de pantallas + arquitectura, y **empezar a construir la Versión 1** de una web local para Windows, accesible desde tablets en la misma red.
+- **Fase:** decisiones cerradas → listo para construir **ForMyKids** V1.
+- **Nombre del proyecto:** `ForMyKids`
+- **Idioma de comunicación con el usuario:** **español**.
+- **Objetivo:** implementar web local en Windows, accesible desde tablets en la misma red.
 
 ---
 
 ## Resumen del producto
-Web **local en casa** (localhost / LAN) para 2 hijos, con:
-- selección de perfil por nombre + avatar,
+Web **local en casa** (localhost / LAN) para 2 hijos, llamada **ForMyKids**, con:
+- selección de perfil por **avatar** (sin escribir nombre) + mascota elegible,
 - tareas diarias por edad,
 - ejemplo/tutorial → práctica → prueba calificada (1–100),
 - audio (TTS) con bocina junto a instrucciones,
@@ -59,21 +59,25 @@ Web **local en casa** (localhost / LAN) para 2 hijos, con:
 |------|----------|
 | Cantidad de hijos | 2 |
 | Edades | ~5 y ~10 |
-| Perfiles | Cada uno escribe su nombre y elige avatar |
-| Avatares | Quiere variedad “Disney / Marvel / anime” |
+| Nombre proyecto | **ForMyKids** |
+| Perfiles | Solo eligen **avatar** (no escriben nombre) + eligen **mascota** |
+| Avatares | Packs originales estilo héroes / princesas / anime (sin IP oficial) |
 | Notas | Escala **1–100** |
 | Niño 5 | Bloque mixto diario |
 | Niña 10 | 2 tareas/día (mate + inglés) |
 | Mate niño 5 | Sopa de números 1–10 + audio ES/EN + sumas/restas fáciles |
 | Mate niña 10 | Nivel 4.º grado |
 | Contenido | Fijo por ahora, **30 días**, ampliable después |
-| Corrección | Automática al terminar; primero ejemplo, luego prueba |
-| Audio | Botón bocina junto a instrucciones (no auto-play obligatorio) |
+| Idioma UI | Instrucciones en **español**; contenido de inglés en **inglés** con **hints en español** |
+| Flujo prueba | Botón **Terminar** → respuestas quedan bloqueadas |
+| Aprobar día | Todas las tareas del día + **≥ 80%** de acierto |
+| Si &lt; 80% | Debe **repetir la prueba con preguntas nuevas** |
+| Audio | Botón bocina junto a instrucciones |
 | Sonidos | Sí, acierto/error |
-| Temas | Sí, distintos por perfil + personajes/mascotas |
-| Dispositivos | PC Windows (host) + tablets de los niños en misma LAN |
-| Alcance red | Solo casa por ahora; internet después |
-| Adulto | PIN + marcar/corregir = **sí** |
+| Temas | Distintos por perfil + mascota elegible |
+| Dispositivos | PC Windows (host) + tablets en misma LAN |
+| Alcance red | Solo casa por ahora |
+| Adulto | PIN **0692** + marcar/corregir |
 | Recordatorios | 10:00, 13:00, 16:00 si no hizo la tarea del día |
 
 ---
@@ -112,16 +116,16 @@ Servicio en la PC Windows + notificaciones push / mecanismo más robusto.
 
 ---
 
-## Preguntas abiertas (pendientes del usuario)
-Si el usuario no responde, usar los **defaults recomendados** entre paréntesis:
+## Preguntas abiertas
+**Ninguna.** Todas cerradas el 2026-07-16:
 
-1. Nombres iniciales o vacíos → **defaults:** campos vacíos; placeholder “Escribe tu nombre”.
-2. PIN adulto por defecto → **default:** `1234` (cambiable en panel).
-3. Instrucciones de la niña → **default:** español; contenido de inglés en inglés cuando corresponda.
-4. Reintentos en preguntas → **default:** pueden reintentar en práctica; en **prueba calificada** cuenta el primer intento (o un intento final por pregunta). Clarificar en UI.
-5. Día completado → **default:** sí, solo al terminar **todo** lo del día (niño: bloque mixto; niña: mate + inglés).
-6. Mascota → **default:** elegible junto con avatar (o mascota sugerida por tema).
-7. Nombre del proyecto → **default:** `Aula en Casa`.
+1. Perfil = **solo avatar** (sin nombre escrito) + mascota elegible.
+2. PIN adulto = **0692**.
+3. Instrucciones en español; contenido EN con hints en español.
+4. Botón Terminar bloquea respuestas.
+5. Día OK solo si terminó todo y score ≥ 80; si &lt; 80, nueva prueba con preguntas nuevas.
+6. Mascota elegible.
+7. Nombre = **ForMyKids**.
 
 ---
 
